@@ -1,136 +1,213 @@
-"""Draw the 25 November 2026 world-news image (1024x1024 PNG).
+"""Draw the 25 November 2026 world-news infographic.
 
-Build tool only: the graded entry is main.py, which copies the
-entry.png this script writes. Run: python3 draw.py
-Headlines verified 25 Nov 2026 from AP / Reuters / AFP / Nikkei /
-The Guardian / Gulf News (all dated/published 25 November 2026).
+Writes entry.png (1024x1024) beside this file. Pillow only, no network,
+no randomness, no timestamps: the same input always yields the same bytes.
+Run:  python3 draw.py
 """
+
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1024, 1024
-SERIF_B = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
-SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
-SANS_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 
-NAVY = (16, 42, 67)
-NAVY2 = (24, 62, 96)
-GOLD = (201, 162, 39)
-PAPER = (247, 243, 232)
-INK = (24, 28, 32)
-MUTED = (84, 90, 96)
-LINE = (205, 198, 184)
+PAPER = (246, 241, 231)
+NAVY = (20, 38, 62)
+GOLD = (217, 164, 65)
+INK = (24, 32, 44)
+BODY_GREY = (74, 74, 68)
+FAINT = (201, 210, 222)
 WHITE = (255, 255, 255)
 
-PANELS = [
-    ("US  •  HUAWEI", (14, 110, 110),
-     "US jury convicts Huawei\nof trade-secret theft",
-     "Brooklyn jury finds the Chinese tech\ngiant guilty on 10 of 12 counts -\ntrade secrets and bank fraud -\nbut acquits it of racketeering."),
-    ("CHINA", (150, 66, 32),
-     "China probes Shanghai\nparty chief Chen Jining",
-     "Politburo member under investigation\nfor suspected serious violations\nof discipline and law, Beijing says."),
-    ("COLOMBIA", (122, 32, 48),
-     "Gunmen take 25 hostages\nat supermarket siege",
-     "Armed men seize shoppers and staff\nat a supermarket; police surround\nthe store as talks begin."),
-    ("MIDDLE EAST  •  HORMUZ", (32, 84, 150),
-     "Iran warns ships in\nHormuz; US probes\n50 hacked vessels",
-     "Tehran rules out US talks unless\nseven conditions are met; Washington\ninvestigates Iranian links to hacked ships."),
-    ("US  •  THANKSGIVING", (88, 66, 130),
-     "Trump pardons Thanksgiving\nturkeys at White House",
-     "The annual ceremony goes ahead\ntwo days before the holiday,\nas the US heads into Thanksgiving."),
-    ("UN  •  WOMEN", (36, 110, 62),
-     "Five women killed every hour\nby relatives in 2025 - UN",
-     "A new UN report counts a woman\nkilled by a partner or relative\nevery 12 minutes last year."),
-]
 
-def font(path, size):
-    return ImageFont.truetype(path, size)
+def font(name, size):
+    return ImageFont.truetype(FONT_DIR + name, size)
 
-def wrap(draw, text, fnt, width):
-    lines = []
-    for para in text.split("\n"):
-        words, cur = para.split(), ""
-        for w in words:
-            t = (cur + " " + w).strip()
-            if draw.textlength(t, font=fnt) <= width:
-                cur = t
-            else:
-                if cur:
-                    lines.append(cur)
-                cur = w
-        if cur:
-            lines.append(cur)
+
+SERIF_BOLD = lambda s: font("DejaVuSerif-Bold.ttf", s)
+SERIF = lambda s: font("DejaVuSerif.ttf", s)
+SANS_BOLD = lambda s: font("DejaVuSans-Bold.ttf", s)
+SANS = lambda s: font("DejaVuSans.ttf", s)
+
+
+def wrap(text, fnt, width):
+    """Greedy word wrap; returns a list of lines that fit in width pixels."""
+    lines, current = [], ""
+    for word in text.split(" "):
+        trial = word if not current else current + " " + word
+        if fnt.getlength(trial) <= width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
-def icon(draw, kind, x, y, s, color):
-    if kind == 0:  # globe
-        draw.ellipse([x, y, x + s, y + s], outline=color, width=4)
-        draw.ellipse([x + s * 0.3, y, x + s * 0.7, y + s], outline=color, width=2)
-        draw.line([x, y + s / 2, x + s, y + s / 2], fill=color, width=2)
-    elif kind == 1:  # chip
-        draw.rounded_rectangle([x, y, x + s, y + s], 6, outline=color, width=4)
-        draw.rectangle([x + s * 0.28, y + s * 0.28, x + s * 0.72, y + s * 0.72], fill=color)
-        for i in range(3):
-            px = x + s * (0.25 + i * 0.25)
-            draw.line([px, y - 8, px, y], fill=color, width=3)
-            draw.line([px, y + s, px, y + s + 8], fill=color, width=3)
-    elif kind == 2:  # ship
-        draw.polygon([(x, y + s * 0.55), (x + s, y + s * 0.55),
-                      (x + s * 0.8, y + s * 0.95), (x + s * 0.2, y + s * 0.95)], fill=color)
-        draw.rectangle([x + s * 0.42, y + s * 0.1, x + s * 0.58, y + s * 0.55], fill=color)
-        draw.line([x, y + s * 1.05, x + s, y + s * 1.05], fill=color, width=3)
-    elif kind == 3:  # ban
-        draw.ellipse([x, y, x + s, y + s], outline=color, width=4)
-        draw.line([x + s * 0.15, y + s * 0.85, x + s * 0.85, y + s * 0.15], fill=color, width=4)
-    elif kind == 4:  # cap / book
-        draw.polygon([(x, y + s * 0.45), (x + s / 2, y + s * 0.15),
-                      (x + s, y + s * 0.45), (x + s / 2, y + s * 0.75)], fill=color)
-        draw.line([x + s * 0.2, y + s * 0.85, x + s * 0.8, y + s * 0.85], fill=color, width=3)
-    else:  # flame
-        draw.polygon([(x + s / 2, y), (x + s * 0.85, y + s * 0.55),
-                      (x + s * 0.65, y + s), (x + s * 0.35, y + s),
-                      (x + s * 0.15, y + s * 0.55)], fill=color)
+
+def fit_lines(text, start_size, min_size, width, max_lines, bold_serif):
+    """Largest size in [min_size, start_size] whose wrap fits max_lines."""
+    size = start_size
+    while size > min_size:
+        fnt = SERIF_BOLD(size) if bold_serif else SANS(size)
+        lines = wrap(text, fnt, width)
+        if len(lines) <= max_lines:
+            return fnt, lines
+        size -= 1
+    fnt = SERIF_BOLD(min_size) if bold_serif else SANS(min_size)
+    return fnt, wrap(text, fnt, width)[:max_lines]
+
+
+def draw_mark(draw, cx, cy, kind, color):
+    """Small geometric mark drawn left of a card's kicker."""
+    if kind == "chip":
+        draw.rectangle([cx - 6, cy - 6, cx + 6, cy + 6], outline=color, width=2)
+        draw.rectangle([cx - 2, cy - 2, cx + 2, cy + 2], fill=color)
+        for dx in (-9, 0, 9):
+            draw.line([cx + dx, cy - 10, cx + dx, cy - 6], fill=color, width=2)
+            draw.line([cx + dx, cy + 6, cx + dx, cy + 10], fill=color, width=2)
+    elif kind == "ban":
+        draw.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], outline=color, width=3)
+        draw.line([cx - 6, cy + 6, cx + 6, cy - 6], fill=color, width=3)
+    elif kind == "diamond":
+        draw.polygon([(cx, cy - 9), (cx + 8, cy), (cx, cy + 9), (cx - 8, cy)],
+                     fill=color)
+    elif kind == "ship":
+        draw.polygon([(cx - 9, cy + 2), (cx + 9, cy + 2), (cx + 6, cy + 8),
+                      (cx - 6, cy + 8)], fill=color)
+        draw.line([cx, cy - 9, cx, cy + 2], fill=color, width=2)
+    elif kind == "feather":
+        draw.ellipse([cx - 5, cy - 9, cx + 5, cy + 5], fill=color)
+        draw.line([cx, cy + 5, cx + 3, cy + 10], fill=color, width=2)
+    else:  # globe
+        draw.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], outline=color, width=2)
+        draw.ellipse([cx - 3, cy - 8, cx + 3, cy + 8], outline=color, width=1)
+        draw.line([cx - 8, cy, cx + 8, cy], fill=color, width=1)
+
+
+def draw_globe(draw, cx, cy, r, color):
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=3)
+    draw.ellipse([cx - r // 3, cy - r, cx + r // 3, cy + r],
+                 outline=color, width=2)
+    draw.line([cx - r, cy, cx + r, cy], fill=color, width=2)
+    draw.line([cx - r + 8, cy - r + 14, cx + r - 8, cy - r + 14],
+              fill=color, width=2)
+    draw.line([cx - r + 8, cy + r - 14, cx + r - 8, cy + r - 14],
+              fill=color, width=2)
+
+
+def draw_card(draw, box, story):
+    x0, y0, x1, y1 = box
+    color = story["color"]
+    draw.rounded_rectangle(box, radius=10, fill=WHITE)
+    draw.rounded_rectangle([x0, y0, x1, y0 + 18], radius=8, fill=color)
+    draw.rectangle([x0, y0 + 9, x1, y0 + 18], fill=color)
+    pad = 20
+    inner_w = (x1 - x0) - 2 * pad
+    kx, ky = x0 + pad, y0 + 30
+    draw_mark(draw, kx + 5, ky + 8, story["mark"], color)
+    draw.text((kx + 20, ky), story["kicker"], font=SANS_BOLD(16), fill=color)
+    head_fnt, head_lines = fit_lines(story["headline"], 28, 24, inner_w, 3, True)
+    hy = y0 + 58
+    for line in head_lines:
+        draw.text((x0 + pad, hy), line, font=head_fnt, fill=INK)
+        hy += int(head_fnt.size * 1.22)
+    body_fnt, body_lines = fit_lines(story["body"], 17, 15, inner_w, 4, False)
+    by = hy + 6
+    for line in body_lines:
+        draw.text((x0 + pad, by), line, font=body_fnt, fill=BODY_GREY)
+        by += int(body_fnt.size * 1.32)
+
+
+STORIES = [
+    {
+        "kicker": "US  \u2022  HUAWEI", "mark": "chip", "color": (15, 118, 110),
+        "headline": "Huawei found guilty of trade-secret theft by US jury",
+        "body": "A Brooklyn jury finds the Chinese tech giant guilty on 10 of "
+                "12 counts \u2014 trade secrets and bank fraud \u2014 but clears "
+                "it of racketeering.",
+    },
+    {
+        "kicker": "CHINA", "mark": "ban", "color": (154, 52, 18),
+        "headline": "China opens probe into Shanghai party chief Chen Jining",
+        "body": "The Politburo member is under investigation for suspected "
+                "serious violations of discipline and law, Beijing says.",
+    },
+    {
+        "kicker": "COLOMBIA", "mark": "diamond", "color": (159, 18, 57),
+        "headline": "Gunmen seize 25 hostages in supermarket siege",
+        "body": "Armed men take shoppers and staff hostage at a supermarket; "
+                "police surround the store as talks begin.",
+    },
+    {
+        "kicker": "MIDDLE EAST  \u2022  HORMUZ", "mark": "ship",
+        "color": (29, 78, 216),
+        "headline": "Iran warns ships in Hormuz as US probes 50 hacked vessels",
+        "body": "Tehran rules out talks with the US unless seven conditions "
+                "are met; Washington investigates Iranian links to the "
+                "hacked ships.",
+    },
+    {
+        "kicker": "US  \u2022  THANKSGIVING", "mark": "feather",
+        "color": (107, 33, 168),
+        "headline": "Trump pardons the Thanksgiving turkeys at the White House",
+        "body": "The annual ceremony goes ahead two days before the holiday, "
+                "as the US heads into Thanksgiving.",
+    },
+    {
+        "kicker": "UN  \u2022  WOMEN", "mark": "globe", "color": (22, 101, 52),
+        "headline": "Five women killed every hour by relatives in 2025, UN says",
+        "body": "A new UN report counts a woman killed by a partner or "
+                "relative every 12 minutes last year.",
+    },
+]
+
 
 def main():
     img = Image.new("RGB", (W, H), PAPER)
-    d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, W, 148], fill=NAVY)
-    d.rectangle([0, 148, W, 154], fill=GOLD)
-    d.text((32, 22), "THE WORLD IN ONE IMAGE", font=font(SERIF_B, 44), fill=WHITE)
-    d.text((32, 82), "WEDNESDAY, 25 NOVEMBER 2026", font=font(SANS_B, 26), fill=(232, 196, 90))
-    d.text((32, 116), "Six stories that defined the day", font=font(SERIF, 22), fill=(205, 218, 232))
-    cx, cy, r = 948, 74, 46
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=GOLD, width=3)
-    d.ellipse([cx - r * 0.55, cy - r, cx + r * 0.55, cy + r], outline=GOLD, width=2)
-    d.line([cx - r, cy, cx + r, cy], fill=GOLD, width=2)
-    gx, gy = 24, 172
-    cw, ch, gap = 476, 222, 20
-    for i, (kicker, color, headline, body) in enumerate(PANELS):
-        x = gx + (i % 2) * (cw + gap)
-        y = gy + (i // 2) * (ch + gap)
-        d.rounded_rectangle([x, y, x + cw, y + ch], 10, fill=WHITE, outline=LINE, width=2)
-        d.rounded_rectangle([x, y, x + cw, y + 8], 4, fill=color)
-        d.text((x + 18, y + 20), kicker, font=font(SANS_B, 17), fill=color)
-        icon(d, [1, 3, 5, 2, 4, 0][i], x + cw - 62, y + 18, 36, color)
-        hl = wrap(d, headline, font(SERIF_B, 27), cw - 36)
-        yy = y + 48
-        for line in hl:
-            d.text((x + 18, yy), line, font=font(SERIF_B, 27), fill=INK)
-            yy += 33
-        bl = wrap(d, body, font(SANS, 18), cw - 36)
-        for line in bl:
-            d.text((x + 18, yy + 4), line, font=font(SANS, 18), fill=MUTED)
-            yy += 24
-    ty = gy + 3 * ch + 2 * gap + 14
-    d.rounded_rectangle([24, ty, W - 24, ty + 48], 8, fill=NAVY2)
-    d.text((40, ty + 12), "ALSO  Houthi strike hits Riyadh tower, 11 injured  •  NATO jets for Poland",
-           font=font(SANS_B, 18), fill=WHITE)
-    d.text((40, ty + 60), "Shein to pay $100M in FTC settlement  •  Nvidia shares fall  •  England beat Australia in 2nd T20I",
-           font=font(SANS, 17), fill=MUTED)
-    d.text((40, ty + 84), "25 NOVEMBER 2026  •  Sources: AP / Reuters / AFP / Nikkei / The Guardian  •  Original infographic",
-           font=font(SANS, 15), fill=MUTED)
-    img.save("entry.png", optimize=True)
-    print("saved entry.png", img.size)
+    draw = ImageDraw.Draw(img)
+
+    # Header band.
+    draw.rectangle([0, 0, W, 148], fill=NAVY)
+    draw.rectangle([0, 148, W, 152], fill=GOLD)
+    draw.text((28, 16), "THE WORLD IN ONE IMAGE",
+              font=SERIF_BOLD(44), fill=WHITE)
+    draw.text((28, 74), "WEDNESDAY, 25 NOVEMBER 2026",
+              font=SANS_BOLD(25), fill=GOLD)
+    draw.text((28, 110), "Six stories that defined the day",
+              font=SERIF(20), fill=FAINT)
+    draw_globe(draw, 940, 74, 42, GOLD)
+
+    # Six story cards: two columns, three rows.
+    margin, gutter = 22, 14
+    card_w = (W - 2 * margin - gutter) // 2
+    card_h, row_gap = 236, 14
+    top = 166
+    for i, story in enumerate(STORIES):
+        col, row = i % 2, i // 2
+        x0 = margin + col * (card_w + gutter)
+        y0 = top + row * (card_h + row_gap)
+        draw_card(draw, (x0, y0, x0 + card_w, y0 + card_h), story)
+
+    # "Also" strip.
+    draw.rounded_rectangle([22, 916, W - 22, 954], radius=8, fill=NAVY)
+    draw.text((40, 926),
+              "ALSO   Houthi strike hits Riyadh tower, 11 injured   "
+              "\u2022   NATO jets for Poland",
+              font=SANS_BOLD(19), fill=WHITE)
+
+    # Footer ticker and source line.
+    draw.text((22, 966),
+              "Shein to pay $100M in FTC settlement   \u2022   Nvidia shares "
+              "fall   \u2022   England beat Australia in 2nd T20I",
+              font=SANS(15), fill=BODY_GREY)
+    draw.text((22, 990),
+              "25 NOVEMBER 2026   \u2022   Sources: AP / Reuters / AFP / "
+              "Nikkei / The Guardian   \u2022   Original infographic",
+              font=SANS(15), fill=BODY_GREY)
+
+    img.save("entry.png", format="PNG")
+
 
 if __name__ == "__main__":
     main()
